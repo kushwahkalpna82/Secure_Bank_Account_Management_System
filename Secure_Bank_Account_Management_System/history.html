@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transaction History — Secure Bank</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <button class="mobile-menu-btn" id="mobileMenuBtn"><i class="fas fa-bars"></i></button>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header"><div class="sidebar-brand"><div class="brand-icon"><i class="fas fa-university"></i></div><h2>Secure <span>Bank</span></h2></div></div>
+            <div class="sidebar-user"><div class="user-avatar" id="sidebarAvatar">U</div><div class="user-info"><h4 id="sidebarUserName">User</h4><p id="sidebarUserRole">Customer</p></div></div>
+            <nav class="sidebar-nav">
+                <div class="nav-label">Main Menu</div>
+                <a href="dashboard.html" data-page="dashboard"><i class="fas fa-chart-pie"></i> Dashboard</a>
+                <a href="deposit.html" data-page="deposit"><i class="fas fa-plus-circle"></i> Deposit</a>
+                <a href="withdraw.html" data-page="withdraw"><i class="fas fa-minus-circle"></i> Withdraw</a>
+                <a href="transfer.html" data-page="transfer"><i class="fas fa-right-left"></i> Transfer</a>
+                <a href="history.html" data-page="history"><i class="fas fa-clock-rotate-left"></i> History</a>
+                <div class="nav-label admin-nav-item">Administration</div>
+                <a href="admin.html" data-page="admin" class="admin-nav-item"><i class="fas fa-shield-halved"></i> Admin Panel</a>
+            </nav>
+            <div class="sidebar-footer"><button class="logout-btn" id="logoutBtn"><i class="fas fa-right-from-bracket"></i> Sign Out</button></div>
+        </aside>
+
+        <main class="main-content">
+            <div class="page-header">
+                <h1><i class="fas fa-clock-rotate-left text-accent"></i> Transaction History</h1>
+                <p>View all your past transactions</p>
+            </div>
+
+            <div class="search-bar">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchInput" placeholder="Search transactions...">
+            </div>
+
+            <div class="filter-tabs">
+                <button class="filter-tab active" data-filter="All">All</button>
+                <button class="filter-tab" data-filter="Deposit">Deposits</button>
+                <button class="filter-tab" data-filter="Withdrawal">Withdrawals</button>
+                <button class="filter-tab" data-filter="Transfer">Transfers</button>
+            </div>
+
+            <div class="card">
+                <div class="table-container">
+                    <table id="txnTable">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Description</th>
+                                <th>Amount</th>
+                                <th>Balance After</th>
+                                <th>Date & Time</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="txnBody">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="empty-state hidden" id="emptyState">
+                    <i class="fas fa-receipt"></i>
+                    <h3>No Transactions Found</h3>
+                    <p>No transactions match your current filter.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="notification-container" id="notificationContainer"></div>
+    <div class="loading-overlay" id="loadingOverlay"><div class="spinner spinner-lg"></div><div class="loading-text">Loading transactions...</div></div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+
+    <script>
+        let allTransactions = [];
+        let currentFilter = 'All';
+
+        (async () => {
+            const user = Auth.requireAuth();
+            if (!user) return;
+            UI.initSidebar('history');
+            Utils.showLoading();
+            try {
+                const account = await AccountOps.getByCustomer(user.uid);
+                if (account) {
+                    allTransactions = await TxnOps.getByAccount(account.id);
+                    renderTransactions();
+                }
+            } catch (err) {
+                console.error(err);
+                Utils.showNotification('Error', 'Failed to load transactions.', 'error');
+            }
+            Utils.hideLoading();
+        })();
+
+        function renderTransactions() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            let filtered = allTransactions;
+
+            if (currentFilter !== 'All') {
+                filtered = filtered.filter(t => t.type === currentFilter);
+            }
+            if (search) {
+                filtered = filtered.filter(t =>
+                    (t.description || '').toLowerCase().includes(search) ||
+                    t.type.toLowerCase().includes(search) ||
+                    t.amount.toString().includes(search)
+                );
+            }
+
+            const tbody = document.getElementById('txnBody');
+            const emptyState = document.getElementById('emptyState');
+            const table = document.getElementById('txnTable');
+
+            if (filtered.length === 0) {
+                table.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            table.classList.remove('hidden');
+            emptyState.classList.add('hidden');
+
+            tbody.innerHTML = filtered.map(t => {
+                const isCredit = t.type === 'Deposit';
+                return `<tr>
+                    <td>${UI.getTransactionBadge(t.type)}</td>
+                    <td>${t.description || t.type}</td>
+                    <td class="${isCredit ? 'amount-credit' : 'amount-debit'}">${isCredit ? '+' : '-'}${Utils.formatCurrency(t.amount)}</td>
+                    <td>${Utils.formatCurrency(t.balanceAfter)}</td>
+                    <td>${Utils.formatDate(t.date)}</td>
+                    <td><span class="badge badge-success">Completed</span></td>
+                </tr>`;
+            }).join('');
+        }
+
+        // Filter tabs
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentFilter = tab.dataset.filter;
+                renderTransactions();
+            });
+        });
+
+        // Search
+        document.getElementById('searchInput').addEventListener('input', renderTransactions);
+    </script>
+</body>
+</html>

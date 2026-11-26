@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transfer — Secure Bank</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <button class="mobile-menu-btn" id="mobileMenuBtn"><i class="fas fa-bars"></i></button>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header"><div class="sidebar-brand"><div class="brand-icon"><i class="fas fa-university"></i></div><h2>Secure <span>Bank</span></h2></div></div>
+            <div class="sidebar-user"><div class="user-avatar" id="sidebarAvatar">U</div><div class="user-info"><h4 id="sidebarUserName">User</h4><p id="sidebarUserRole">Customer</p></div></div>
+            <nav class="sidebar-nav">
+                <div class="nav-label">Main Menu</div>
+                <a href="dashboard.html" data-page="dashboard"><i class="fas fa-chart-pie"></i> Dashboard</a>
+                <a href="deposit.html" data-page="deposit"><i class="fas fa-plus-circle"></i> Deposit</a>
+                <a href="withdraw.html" data-page="withdraw"><i class="fas fa-minus-circle"></i> Withdraw</a>
+                <a href="transfer.html" data-page="transfer"><i class="fas fa-right-left"></i> Transfer</a>
+                <a href="history.html" data-page="history"><i class="fas fa-clock-rotate-left"></i> History</a>
+                <div class="nav-label admin-nav-item">Administration</div>
+                <a href="admin.html" data-page="admin" class="admin-nav-item"><i class="fas fa-shield-halved"></i> Admin Panel</a>
+            </nav>
+            <div class="sidebar-footer"><button class="logout-btn" id="logoutBtn"><i class="fas fa-right-from-bracket"></i> Sign Out</button></div>
+        </aside>
+
+        <main class="main-content">
+            <div class="page-header">
+                <h1><i class="fas fa-right-left text-accent"></i> Transfer Funds</h1>
+                <p>Send money to another account</p>
+            </div>
+
+            <div class="card balance-card mb-3">
+                <div class="balance-label">Current Balance</div>
+                <div class="balance-amount" id="balanceAmount">₹0.00</div>
+                <div class="account-info">Account: <span id="accountNumber">-</span></div>
+            </div>
+
+            <div class="card" style="max-width:520px;">
+                <h2 style="margin-bottom:1.25rem;font-size:1.1rem;">Transfer Details</h2>
+                <form id="transferForm">
+                    <div class="form-group">
+                        <label>Recipient Account Number</label>
+                        <div class="input-group">
+                            <i class="fas fa-user input-icon"></i>
+                            <input type="text" class="form-control" id="recipientAcc" placeholder="e.g. ACC1234567890" required>
+                        </div>
+                        <div class="recipient-info" id="recipientInfo">
+                            <i class="fas fa-check-circle"></i>
+                            <span id="recipientName">-</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Amount (₹)</label>
+                        <div class="input-group">
+                            <i class="fas fa-indian-rupee-sign input-icon"></i>
+                            <input type="number" class="form-control" id="transferAmount" placeholder="Enter amount" min="1" step="0.01" required>
+                        </div>
+                        <div class="form-error" id="balanceError">Insufficient balance</div>
+                    </div>
+                    <div class="form-group">
+                        <label>Description (Optional)</label>
+                        <div class="input-group">
+                            <i class="fas fa-comment input-icon"></i>
+                            <input type="text" class="form-control" id="transferDesc" placeholder="e.g. Rent, Payment">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block btn-lg" id="transferBtn" disabled>
+                        <i class="fas fa-paper-plane"></i> Send Transfer
+                    </button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <div class="notification-container" id="notificationContainer"></div>
+    <div class="loading-overlay" id="loadingOverlay"><div class="spinner spinner-lg"></div><div class="loading-text">Processing transfer...</div></div>
+    <div class="modal-overlay" id="confirmModal">
+        <div class="modal">
+            <div class="modal-header"><h3>Confirm Transfer</h3><button class="modal-close">&times;</button></div>
+            <div class="modal-body"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-cancel">Cancel</button>
+                <button class="btn btn-primary btn-confirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+
+    <script>
+        let currentAccount = null;
+        let recipientAccount = null;
+        let lookupTimeout = null;
+
+        (async () => {
+            const user = Auth.requireAuth();
+            if (!user) return;
+            UI.initSidebar('transfer');
+            Utils.showLoading();
+            try {
+                currentAccount = await AccountOps.getByCustomer(user.uid);
+                if (currentAccount) {
+                    document.getElementById('balanceAmount').textContent = Utils.formatCurrency(currentAccount.balance);
+                    document.getElementById('accountNumber').textContent = currentAccount.accountNumber;
+                }
+            } catch (err) { console.error(err); }
+            Utils.hideLoading();
+        })();
+
+        // Real-time recipient lookup
+        document.getElementById('recipientAcc').addEventListener('input', (e) => {
+            clearTimeout(lookupTimeout);
+            const accNum = e.target.value.trim();
+            const infoEl = document.getElementById('recipientInfo');
+            const btn = document.getElementById('transferBtn');
+            
+            if (accNum.length < 5) {
+                infoEl.classList.remove('visible', 'error');
+                btn.disabled = true;
+                recipientAccount = null;
+                return;
+            }
+
+            lookupTimeout = setTimeout(async () => {
+                try {
+                    const acc = await AccountOps.getByAccountNumber(accNum);
+                    if (acc) {
+                        if (currentAccount && acc.id === currentAccount.id) {
+                            infoEl.className = 'recipient-info visible error';
+                            document.getElementById('recipientName').textContent = 'Cannot transfer to your own account';
+                            btn.disabled = true;
+                            recipientAccount = null;
+                        } else {
+                            const customer = await CustomerOps.getById(acc.customerId);
+                            infoEl.className = 'recipient-info visible';
+                            document.getElementById('recipientName').textContent = customer ? customer.name : 'Account Found';
+                            btn.disabled = false;
+                            recipientAccount = acc;
+                        }
+                    } else {
+                        infoEl.className = 'recipient-info visible error';
+                        document.getElementById('recipientName').textContent = 'Account not found';
+                        btn.disabled = true;
+                        recipientAccount = null;
+                    }
+                } catch (err) {
+                    infoEl.className = 'recipient-info visible error';
+                    document.getElementById('recipientName').textContent = 'Lookup failed';
+                    btn.disabled = true;
+                }
+            }, 500);
+        });
+
+        // Balance validation
+        document.getElementById('transferAmount').addEventListener('input', () => {
+            const amount = parseFloat(document.getElementById('transferAmount').value) || 0;
+            const errorEl = document.getElementById('balanceError');
+            const input = document.getElementById('transferAmount');
+            if (currentAccount && amount > currentAccount.balance) {
+                errorEl.style.display = 'block';
+                input.classList.add('error');
+            } else {
+                errorEl.style.display = 'none';
+                input.classList.remove('error');
+            }
+        });
+
+        document.getElementById('transferForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const toAccNum = document.getElementById('recipientAcc').value.trim();
+            const amount = parseFloat(document.getElementById('transferAmount').value);
+            const desc = document.getElementById('transferDesc').value.trim();
+
+            if (!toAccNum || !recipientAccount) {
+                Utils.showNotification('Error', 'Please enter a valid recipient account.', 'error'); return;
+            }
+            if (!amount || amount <= 0) {
+                Utils.showNotification('Error', 'Please enter a valid amount.', 'error'); return;
+            }
+            if (amount > currentAccount.balance) {
+                Utils.showNotification('Error', 'Insufficient balance.', 'error'); return;
+            }
+
+            const recipientCustomer = await CustomerOps.getById(recipientAccount.customerId);
+            const recipientName = recipientCustomer ? recipientCustomer.name : 'Unknown';
+
+            const confirmed = await Utils.showConfirmModal('Confirm Transfer',
+                `<p>Transfer <strong style="color:var(--info)">${Utils.formatCurrency(amount)}</strong> to:</p>
+                 <p style="margin-top:0.5rem;"><strong>${recipientName}</strong><br>
+                 <span style="color:var(--text-muted);font-size:0.85rem;">${toAccNum}</span></p>
+                 <p style="margin-top:0.75rem;font-size:0.85rem;">Balance after: <strong>${Utils.formatCurrency(currentAccount.balance - amount)}</strong></p>`);
+            if (!confirmed) return;
+
+            Utils.showLoading();
+            try {
+                const result = await AccountOps.transfer(currentAccount.id, toAccNum, amount, desc);
+                currentAccount.balance = result.fromNewBalance;
+                document.getElementById('balanceAmount').textContent = Utils.formatCurrency(result.fromNewBalance);
+                document.getElementById('recipientAcc').value = '';
+                document.getElementById('transferAmount').value = '';
+                document.getElementById('transferDesc').value = '';
+                document.getElementById('recipientInfo').classList.remove('visible');
+                document.getElementById('transferBtn').disabled = true;
+                recipientAccount = null;
+                Utils.hideLoading();
+                Utils.showNotification('Transfer Successful',
+                    `${Utils.formatCurrency(amount)} sent to ${result.recipientName}. New balance: ${Utils.formatCurrency(result.fromNewBalance)}`, 'success');
+            } catch (err) {
+                Utils.hideLoading();
+                Utils.showNotification('Transfer Failed', err.message, 'error');
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel — Secure Bank</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <button class="mobile-menu-btn" id="mobileMenuBtn"><i class="fas fa-bars"></i></button>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header"><div class="sidebar-brand"><div class="brand-icon"><i class="fas fa-university"></i></div><h2>Secure <span>Bank</span></h2></div></div>
+            <div class="sidebar-user"><div class="user-avatar" id="sidebarAvatar">U</div><div class="user-info"><h4 id="sidebarUserName">User</h4><p id="sidebarUserRole">Customer</p></div></div>
+            <nav class="sidebar-nav">
+                <div class="nav-label">Main Menu</div>
+                <a href="dashboard.html" data-page="dashboard"><i class="fas fa-chart-pie"></i> Dashboard</a>
+                <a href="deposit.html" data-page="deposit"><i class="fas fa-plus-circle"></i> Deposit</a>
+                <a href="withdraw.html" data-page="withdraw"><i class="fas fa-minus-circle"></i> Withdraw</a>
+                <a href="transfer.html" data-page="transfer"><i class="fas fa-right-left"></i> Transfer</a>
+                <a href="history.html" data-page="history"><i class="fas fa-clock-rotate-left"></i> History</a>
+                <div class="nav-label admin-nav-item">Administration</div>
+                <a href="admin.html" data-page="admin" class="admin-nav-item"><i class="fas fa-shield-halved"></i> Admin Panel</a>
+            </nav>
+            <div class="sidebar-footer"><button class="logout-btn" id="logoutBtn"><i class="fas fa-right-from-bracket"></i> Sign Out</button></div>
+        </aside>
+
+        <main class="main-content">
+            <div class="page-header">
+                <h1><i class="fas fa-shield-halved text-accent"></i> Admin Panel</h1>
+                <p>System overview and management</p>
+            </div>
+
+            <!-- Stats Overview -->
+            <div class="stats-grid">
+                <div class="card stat-card">
+                    <div class="stat-icon total"><i class="fas fa-users"></i></div>
+                    <div class="stat-value" id="statCustomers">0</div>
+                    <div class="stat-label">Total Customers</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-icon deposit"><i class="fas fa-wallet"></i></div>
+                    <div class="stat-value" id="statAccounts">0</div>
+                    <div class="stat-label">Total Accounts</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-icon transfer"><i class="fas fa-receipt"></i></div>
+                    <div class="stat-value" id="statTransactions">0</div>
+                    <div class="stat-label">Total Transactions</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-icon withdraw"><i class="fas fa-clipboard-list"></i></div>
+                    <div class="stat-value" id="statAuditLogs">0</div>
+                    <div class="stat-label">Audit Logs</div>
+                </div>
+            </div>
+
+            <!-- Admin Tabs -->
+            <div class="admin-tabs">
+                <button class="admin-tab active" data-panel="customers"><i class="fas fa-users"></i> Customers</button>
+                <button class="admin-tab" data-panel="accounts"><i class="fas fa-wallet"></i> Accounts</button>
+                <button class="admin-tab" data-panel="transactions"><i class="fas fa-receipt"></i> Transactions</button>
+                <button class="admin-tab" data-panel="auditlog"><i class="fas fa-clipboard-list"></i> Audit Log</button>
+            </div>
+
+            <!-- Customers Panel -->
+            <div class="admin-panel active" id="panel-customers">
+                <div class="card">
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Joined</th></tr></thead>
+                            <tbody id="customersBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Accounts Panel -->
+            <div class="admin-panel" id="panel-accounts">
+                <div class="card">
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Account Number</th><th>Customer ID</th><th>Type</th><th>Balance</th><th>Status</th><th>Created</th></tr></thead>
+                            <tbody id="accountsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transactions Panel -->
+            <div class="admin-panel" id="panel-transactions">
+                <div class="card">
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Type</th><th>Account ID</th><th>Amount</th><th>Balance After</th><th>Description</th><th>Date</th><th>Status</th></tr></thead>
+                            <tbody id="transactionsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Audit Log Panel -->
+            <div class="admin-panel" id="panel-auditlog">
+                <div class="card">
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Action</th><th>Email</th><th>Details</th><th>Timestamp</th></tr></thead>
+                            <tbody id="auditBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="notification-container" id="notificationContainer"></div>
+    <div class="loading-overlay" id="loadingOverlay"><div class="spinner spinner-lg"></div><div class="loading-text">Loading admin data...</div></div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+
+    <script>
+        (async () => {
+            const user = Auth.requireAdmin();
+            if (!user) return;
+            UI.initSidebar('admin');
+            Utils.showLoading();
+
+            try {
+                await AuditLog.log(user.uid, user.email, 'ADMIN_ACCESS', 'Admin panel accessed');
+
+                // Load all data
+                const [customers, accounts, transactions, auditLogs] = await Promise.all([
+                    CustomerOps.getAll(),
+                    AccountOps.getAll(),
+                    TxnOps.getAll(),
+                    AuditLog.getAll()
+                ]);
+
+                // Stats
+                document.getElementById('statCustomers').textContent = customers.length;
+                document.getElementById('statAccounts').textContent = accounts.length;
+                document.getElementById('statTransactions').textContent = transactions.length;
+                document.getElementById('statAuditLogs').textContent = auditLogs.length;
+
+                // Customers table
+                document.getElementById('customersBody').innerHTML = customers.map(c => `<tr>
+                    <td title="${c.id}">${c.id.substring(0, 8)}...</td>
+                    <td><strong>${c.name}</strong></td>
+                    <td>${c.email}</td>
+                    <td>${c.phone || '-'}</td>
+                    <td><span class="badge ${c.role === 'admin' ? 'badge-admin' : 'badge-info'}">${c.role}</span></td>
+                    <td>${Utils.formatDate(c.createdAt)}</td>
+                </tr>`).join('') || '<tr><td colspan="6" class="text-center text-muted">No customers</td></tr>';
+
+                // Accounts table
+                document.getElementById('accountsBody').innerHTML = accounts.map(a => `<tr>
+                    <td><strong>${a.accountNumber}</strong></td>
+                    <td title="${a.customerId}">${a.customerId.substring(0, 8)}...</td>
+                    <td>${a.accountType}</td>
+                    <td><strong>${Utils.formatCurrency(a.balance)}</strong></td>
+                    <td><span class="badge badge-active">${a.status}</span></td>
+                    <td>${Utils.formatDate(a.createdAt)}</td>
+                </tr>`).join('') || '<tr><td colspan="6" class="text-center text-muted">No accounts</td></tr>';
+
+                // Transactions table
+                document.getElementById('transactionsBody').innerHTML = transactions.map(t => {
+                    const isCredit = t.type === 'Deposit';
+                    return `<tr>
+                        <td>${UI.getTransactionBadge(t.type)}</td>
+                        <td title="${t.accountId}">${t.accountId.substring(0, 8)}...</td>
+                        <td class="${isCredit ? 'amount-credit' : 'amount-debit'}">${isCredit ? '+' : '-'}${Utils.formatCurrency(t.amount)}</td>
+                        <td>${Utils.formatCurrency(t.balanceAfter)}</td>
+                        <td>${t.description || '-'}</td>
+                        <td>${Utils.formatDate(t.date)}</td>
+                        <td><span class="badge badge-success">Completed</span></td>
+                    </tr>`;
+                }).join('') || '<tr><td colspan="7" class="text-center text-muted">No transactions</td></tr>';
+
+                // Audit log table
+                document.getElementById('auditBody').innerHTML = auditLogs.map(l => `<tr>
+                    <td><span class="badge ${UI.getAuditBadge(l.action)}">${l.action}</span></td>
+                    <td>${l.email || '-'}</td>
+                    <td>${l.details || '-'}</td>
+                    <td>${Utils.formatDate(l.timestamp)}</td>
+                </tr>`).join('') || '<tr><td colspan="4" class="text-center text-muted">No audit logs</td></tr>';
+
+            } catch (err) {
+                console.error(err);
+                Utils.showNotification('Error', 'Failed to load admin data.', 'error');
+            }
+            Utils.hideLoading();
+        })();
+
+        // Tab switching
+        document.querySelectorAll('.admin-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+            });
+        });
+    </script>
+</body>
+</html>

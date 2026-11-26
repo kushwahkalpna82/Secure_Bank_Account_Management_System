@@ -1,0 +1,18 @@
+# Environment & Secret Keys (Never expose on GitHub)
+.env
+.env.*
+!.env.example
+firebase-config.js
+
+# Firebase & Node
+.firebase/
+node_modules/
+firebase-debug.log
+
+# Python / Temp Scripts
+__pycache__/
+*.py[cod]
+
+# OS / Editor
+.DS_Store
+Thumbs.db

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Withdraw — Secure Bank</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <button class="mobile-menu-btn" id="mobileMenuBtn"><i class="fas fa-bars"></i></button>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header"><div class="sidebar-brand"><div class="brand-icon"><i class="fas fa-university"></i></div><h2>Secure <span>Bank</span></h2></div></div>
+            <div class="sidebar-user"><div class="user-avatar" id="sidebarAvatar">U</div><div class="user-info"><h4 id="sidebarUserName">User</h4><p id="sidebarUserRole">Customer</p></div></div>
+            <nav class="sidebar-nav">
+                <div class="nav-label">Main Menu</div>
+                <a href="dashboard.html" data-page="dashboard"><i class="fas fa-chart-pie"></i> Dashboard</a>
+                <a href="deposit.html" data-page="deposit"><i class="fas fa-plus-circle"></i> Deposit</a>
+                <a href="withdraw.html" data-page="withdraw"><i class="fas fa-minus-circle"></i> Withdraw</a>
+                <a href="transfer.html" data-page="transfer"><i class="fas fa-right-left"></i> Transfer</a>
+                <a href="history.html" data-page="history"><i class="fas fa-clock-rotate-left"></i> History</a>
+                <div class="nav-label admin-nav-item">Administration</div>
+                <a href="admin.html" data-page="admin" class="admin-nav-item"><i class="fas fa-shield-halved"></i> Admin Panel</a>
+            </nav>
+            <div class="sidebar-footer"><button class="logout-btn" id="logoutBtn"><i class="fas fa-right-from-bracket"></i> Sign Out</button></div>
+        </aside>
+
+        <main class="main-content">
+            <div class="page-header">
+                <h1><i class="fas fa-minus-circle text-accent"></i> Withdraw Funds</h1>
+                <p>Withdraw money from your account</p>
+            </div>
+
+            <div class="card balance-card mb-3">
+                <div class="balance-label">Current Balance</div>
+                <div class="balance-amount" id="balanceAmount">₹0.00</div>
+                <div class="account-info">Account: <span id="accountNumber">-</span></div>
+            </div>
+
+            <div class="card" style="max-width:520px;">
+                <h2 style="margin-bottom:1.25rem;font-size:1.1rem;">Withdraw Amount</h2>
+                <div class="quick-amounts">
+                    <button class="quick-amount-btn" onclick="setAmount(500)">₹500</button>
+                    <button class="quick-amount-btn" onclick="setAmount(1000)">₹1,000</button>
+                    <button class="quick-amount-btn" onclick="setAmount(2000)">₹2,000</button>
+                    <button class="quick-amount-btn" onclick="setAmount(5000)">₹5,000</button>
+                </div>
+                <form id="withdrawForm">
+                    <div class="form-group">
+                        <label>Amount (₹)</label>
+                        <div class="input-group">
+                            <i class="fas fa-indian-rupee-sign input-icon"></i>
+                            <input type="number" class="form-control" id="withdrawAmount" placeholder="Enter amount" min="1" step="0.01" required>
+                        </div>
+                        <div class="form-error" id="balanceError">Insufficient balance</div>
+                    </div>
+                    <div class="form-group">
+                        <label>Description (Optional)</label>
+                        <div class="input-group">
+                            <i class="fas fa-comment input-icon"></i>
+                            <input type="text" class="form-control" id="withdrawDesc" placeholder="e.g. ATM, Bills">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block btn-lg">
+                        <i class="fas fa-minus-circle"></i> Withdraw
+                    </button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <div class="notification-container" id="notificationContainer"></div>
+    <div class="loading-overlay" id="loadingOverlay"><div class="spinner spinner-lg"></div><div class="loading-text">Processing...</div></div>
+    <div class="modal-overlay" id="confirmModal">
+        <div class="modal">
+            <div class="modal-header"><h3>Confirm Withdrawal</h3><button class="modal-close">&times;</button></div>
+            <div class="modal-body"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-cancel">Cancel</button>
+                <button class="btn btn-primary btn-confirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+
+    <script>
+        let currentAccount = null;
+        function setAmount(val) { document.getElementById('withdrawAmount').value = val; validateBalance(); }
+
+        function validateBalance() {
+            const amount = parseFloat(document.getElementById('withdrawAmount').value) || 0;
+            const errorEl = document.getElementById('balanceError');
+            const input = document.getElementById('withdrawAmount');
+            if (currentAccount && amount > currentAccount.balance) {
+                errorEl.style.display = 'block';
+                input.classList.add('error');
+            } else {
+                errorEl.style.display = 'none';
+                input.classList.remove('error');
+            }
+        }
+
+        (async () => {
+            const user = Auth.requireAuth();
+            if (!user) return;
+            UI.initSidebar('withdraw');
+            Utils.showLoading();
+            try {
+                currentAccount = await AccountOps.getByCustomer(user.uid);
+                if (currentAccount) {
+                    document.getElementById('balanceAmount').textContent = Utils.formatCurrency(currentAccount.balance);
+                    document.getElementById('accountNumber').textContent = currentAccount.accountNumber;
+                }
+            } catch (err) { console.error(err); }
+            Utils.hideLoading();
+        })();
+
+        document.getElementById('withdrawAmount').addEventListener('input', validateBalance);
+
+        document.getElementById('withdrawForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const amount = parseFloat(document.getElementById('withdrawAmount').value);
+            const desc = document.getElementById('withdrawDesc').value.trim();
+
+            if (!amount || amount <= 0) {
+                Utils.showNotification('Error', 'Please enter a valid amount.', 'error'); return;
+            }
+            if (amount > currentAccount.balance) {
+                Utils.showNotification('Error', 'Insufficient balance for this withdrawal.', 'error'); return;
+            }
+
+            const balanceAfter = currentAccount.balance - amount;
+            const confirmed = await Utils.showConfirmModal('Confirm Withdrawal',
+                `<p>Withdraw <strong style="color:var(--danger)">${Utils.formatCurrency(amount)}</strong> from your account?</p>
+                 <p style="margin-top:0.5rem;font-size:0.85rem;">Balance after: <strong>${Utils.formatCurrency(balanceAfter)}</strong></p>`);
+            if (!confirmed) return;
+
+            Utils.showLoading();
+            try {
+                const newBalance = await AccountOps.withdraw(currentAccount.id, amount, desc);
+                currentAccount.balance = newBalance;
+                document.getElementById('balanceAmount').textContent = Utils.formatCurrency(newBalance);
+                document.getElementById('withdrawAmount').value = '';
+                document.getElementById('withdrawDesc').value = '';
+                Utils.hideLoading();
+                Utils.showNotification('Withdrawal Successful', `${Utils.formatCurrency(amount)} withdrawn. New balance: ${Utils.formatCurrency(newBalance)}`, 'success');
+            } catch (err) {
+                Utils.hideLoading();
+                Utils.showNotification('Withdrawal Failed', err.message, 'error');
+            }
+        });
+    </script>
+</body>
+</html>

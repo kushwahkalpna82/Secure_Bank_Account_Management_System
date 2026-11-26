@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — Secure Bank</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+    <!-- EmailJS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="auth-logo">
+                <div class="logo-icon"><i class="fas fa-university"></i></div>
+                <h1>Secure <span>Bank</span></h1>
+                <p>Sign in to your account</p>
+            </div>
+
+            <!-- Login Form -->
+            <form id="loginForm">
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <div class="input-group">
+                        <i class="fas fa-envelope input-icon"></i>
+                        <input type="email" class="form-control" id="loginEmail" placeholder="Enter your email" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <div class="input-group">
+                        <i class="fas fa-lock input-icon"></i>
+                        <input type="password" class="form-control" id="loginPassword" placeholder="Enter your password" required>
+                        <button type="button" class="password-toggle" onclick="togglePassword('loginPassword', this)">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block btn-lg" id="loginBtn">
+                    <i class="fas fa-sign-in-alt"></i> Sign In
+                </button>
+            </form>
+
+            <div class="auth-footer">
+                Don't have an account? <a href="register.html">Create Account</a>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MFA Modal -->
+    <div class="modal-overlay" id="mfaModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-shield-halved" style="color:var(--accent);margin-right:8px;"></i> Two-Factor Authentication</h3>
+                <button class="modal-close" id="mfaClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom:1rem;">A One-Time Password has been sent to your registered email address. Enter it below to verify your identity.</p>
+                <div class="otp-display">
+                    <div style="font-size:2.5rem;margin-bottom:0.5rem;"><i class="fas fa-envelope-circle-check" style="color:var(--accent);"></i></div>
+                    <div style="font-size:0.95rem;color:var(--text-primary);font-weight:600;" id="otpEmailMsg">OTP sent to your email</div>
+                    <div class="otp-timer">Expires in <span id="otpTimer">5:00</span></div>
+                </div>
+                <div class="form-group" style="margin-top:1.25rem;">
+                    <label>Enter OTP</label>
+                    <div class="input-group">
+                        <i class="fas fa-key input-icon"></i>
+                        <input type="text" class="form-control" id="otpInput" placeholder="Enter 6-digit OTP" maxlength="6" autocomplete="off">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="mfaCancelBtn">Cancel</button>
+                <button class="btn btn-primary" id="mfaVerifyBtn">
+                    <i class="fas fa-check-circle"></i> Verify OTP
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div class="notification-container" id="notificationContainer"></div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner spinner-lg"></div>
+        <div class="loading-text">Authenticating...</div>
+    </div>
+
+    <!-- Firebase CDN -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+
+    <script>
+        // If already authenticated, redirect
+        auth.onAuthStateChanged(user => {
+            if (user && sessionStorage.getItem('mfaVerified') === 'true') {
+                const role = sessionStorage.getItem('userRole');
+                window.location.href = role === 'admin' ? 'admin.html' : 'dashboard.html';
+            }
+        });
+
+        function togglePassword(inputId, btn) {
+            const input = document.getElementById(inputId);
+            const icon = btn.querySelector('i');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fas fa-eye';
+            }
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            if (!email || !password) {
+                Utils.showNotification('Error', 'Please fill in all fields.', 'error');
+                return;
+            }
+            Utils.showLoading();
+            try {
+                await Auth.login(email, password);
+                Utils.hideLoading();
+                const otp = MFA.generateOTP();
+
+                // Send OTP via email
+                const userName = sessionStorage.getItem('userName');
+                const emailSent = await MFA.sendOTPEmail(email, userName, otp);
+
+                document.getElementById('mfaModal').classList.add('active');
+                document.getElementById('otpInput').value = '';
+                document.getElementById('otpInput').focus();
+                startOTPTimer();
+
+                if (emailSent) {
+                    // Mask email: show first 3 chars + ***@domain
+                    const maskedEmail = email.substring(0, 3) + '***@' + email.split('@')[1];
+                    document.getElementById('otpEmailMsg').textContent = 'OTP sent to ' + maskedEmail;
+                    Utils.showNotification('OTP Sent', 'A 6-digit OTP has been sent to your email.', 'info');
+                } else {
+                    // Fallback: show OTP on screen if email fails
+                    document.getElementById('otpEmailMsg').innerHTML = 
+                        '<span style="color:var(--warning);">Email delivery failed.</span><br>' +
+                        '<span style="font-size:2rem;letter-spacing:10px;color:var(--accent);font-family:monospace;margin-top:0.5rem;display:block;">' + otp + '</span>';
+                    Utils.showNotification('Email Failed', 'OTP displayed on screen instead. Check EmailJS config.', 'warning');
+                }
+            } catch (err) {
+                Utils.hideLoading();
+                let msg = 'Login failed. Please check your credentials.';
+                if (err.code === 'auth/user-not-found') msg = 'No account found with this email.';
+                else if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') msg = 'Invalid email or password.';
+                else if (err.code === 'auth/too-many-requests') msg = 'Too many attempts. Try again later.';
+                Utils.showNotification('Login Failed', msg, 'error');
+            }
+        });
+
+        let timerInterval;
+        function startOTPTimer() {
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                const remaining = MFA.getTimeRemaining();
+                document.getElementById('otpTimer').textContent = remaining;
+                if (remaining === '0:00') {
+                    clearInterval(timerInterval);
+                    Utils.showNotification('OTP Expired', 'Your OTP has expired. Please login again.', 'warning');
+                    closeMFA();
+                }
+            }, 1000);
+        }
+
+        document.getElementById('mfaVerifyBtn').addEventListener('click', async () => {
+            const inputOTP = document.getElementById('otpInput').value.trim();
+            if (!inputOTP || inputOTP.length !== 6) {
+                Utils.showNotification('Error', 'Please enter a valid 6-digit OTP.', 'error');
+                return;
+            }
+            const result = MFA.verifyOTP(inputOTP);
+            if (result.success) {
+                clearInterval(timerInterval);
+                const uid = sessionStorage.getItem('userId');
+                const email = sessionStorage.getItem('userEmail');
+                await AuditLog.log(uid, email, 'MFA_VERIFY', 'OTP verified successfully');
+                await AuditLog.log(uid, email, 'LOGIN', 'User session created');
+                Utils.showNotification('Success', 'Authentication successful! Redirecting...', 'success');
+                setTimeout(() => {
+                    const role = sessionStorage.getItem('userRole');
+                    window.location.href = role === 'admin' ? 'admin.html' : 'dashboard.html';
+                }, 1000);
+            } else {
+                Utils.showNotification('Verification Failed', result.message, 'error');
+            }
+        });
+
+        document.getElementById('otpInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') document.getElementById('mfaVerifyBtn').click();
+        });
+
+        function closeMFA() {
+            document.getElementById('mfaModal').classList.remove('active');
+            clearInterval(timerInterval);
+            MFA.clearOTP();
+            auth.signOut();
+            sessionStorage.clear();
+        }
+        document.getElementById('mfaClose').addEventListener('click', closeMFA);
+        document.getElementById('mfaCancelBtn').addEventListener('click', closeMFA);
+    </script>
+</body>
+</html>
